@@ -12,7 +12,8 @@
 // Global constatns
 #define MAX_LINE	(1000)
 // TODO: change this
-#define SERV_PORT	(5000)
+#define SERV_PORT	(7)
+#define IP_ADDR		"127.0.0.1"
 
 // function declarations
 // TODO: check for the pointer to pointer of sockaddr
@@ -32,8 +33,8 @@ int main(int argc, char* argv[]) {
 		printf("CLIENT: Not enough arguments.\n");
 	}
 	*/
-	char* ipAddress = argv[1];
-	/*
+	char* ipAddress = IP_ADDR;
+	/* char* ipAddress = argv[1];
 	short int port = atoi(argv[2]);
 	int filePathSize = strlen(argv[3]);
 	char filePath[filePathSize];
@@ -58,6 +59,7 @@ int main(int argc, char* argv[]) {
 	// assigning values to relevant data members
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(SERV_PORT);
+	servaddr.sin_addr.s_addr =  inet_addr(ipAddress);
 
 	// set the remote IP address
 	if (inet_aton(ipAddress, &servaddr.sin_addr) <= 0) {
@@ -81,6 +83,7 @@ int main(int argc, char* argv[]) {
 	}
 	*/
 	// sendFile(fp, sockfd, (struct sockaddr*) &servaddr, sizeof(servaddr));
+	printf("callind sendFile.\n");
 	sendFile(stdin, sockfd, (struct sockaddr*) &servaddr, sizeof(servaddr));
 	return EXIT_SUCCESS;	
 }
