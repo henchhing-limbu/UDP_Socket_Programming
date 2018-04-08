@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 	}
 	
 	// intializing every struct structure to 0
-	printf("SERVER: Initializing every structure to 0.\n");
+	// printf("SERVER: Initializing every structure to 0.\n");
 	memset(&servaddr, 0, sizeof(servaddr));
 	// filling up relevant members
 	servaddr.sin_family = AF_INET;

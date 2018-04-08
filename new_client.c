@@ -8,10 +8,10 @@
 #include <string.h>
 
 // Global constant
-#define MAX_LINE		(100)
+#define MAX_LINE		(25)
 
 // function declarations
-void foundError(char* errorMessage);
+void DieWithError(char *errorMessage);
 int main (int argc, char *argv[]) {
 	// socket descriptor
 	int sockfd;
@@ -36,15 +36,17 @@ int main (int argc, char *argv[]) {
 	}
 	ipAddress = argv[1];
 	echoString = argv[2];
+	printf("Input string: %s\n", echoString);
 	// checking for the string length
 	if ((echoStringLen = strlen(echoString)) > MAX_LINE) {
 		printf("CLIENT: Echo word too long.\n");
 		exit(EXIT_FAILURE);
 	}
 	port = atoi(argv[3]);
+	printf("Port number: %d\n", port);
 	
 	// creating UDP socket
-	if (sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP) < 0) {
+	if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
 		printf("SERVER: Couldn't creat socket.\n");
 		exit(EXIT_FAILURE);
 	}
@@ -58,17 +60,24 @@ int main (int argc, char *argv[]) {
 	servAddr.sin_port = htons(port);					// server port
 	
 	// sending string to the server
-	if ((sendto(sockfd, echoString, echoStringLen, 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) != echoStringLen) {
+	int x ;
+	if ((x = sendto(sockfd, echoString, echoStringLen, 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) != echoStringLen) {
+		printf("echoString length: %d\n", echoStringLen);
+		printf("sentBytes length: %d\n", x);
 		printf("CLIENT: sendto sent different number of bytes than expected.\n");
 		exit(EXIT_FAILURE);
 	}
-	
+	printf("sent string length: %d\n", x);
+	printf("echo String Length: %d\n", echoStringLen);
 	// receiving a response
 	fromSize = sizeof(fromAddr);
 	// receive string from the server
-	if (recvStringLen = recvfrom(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &fromAddr, &fromSize) != echoStringLen ) {
-		printf("CLIENT: recvfrom() failed.\n");
-		exit(EXIT_FAILURE);
+	if ((recvStringLen = recvfrom(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &fromAddr, &fromSize)) != echoStringLen ) {
+		// printf("Sent string length: %d\n", echoStringLen);
+		// printf("received string length: %d\n", recvStringLen);
+		// printf("CLIENT: recvfrom() failed.\n");
+		DieWithError("recvfrom() failed.");
+		// exit(EXIT_FAILURE);
 	}
 	if (servAddr.sin_addr.s_addr != fromAddr.sin_addr.s_addr) {
 		printf("CLIENT: Received data from unknown source.\n");
@@ -81,5 +90,10 @@ int main (int argc, char *argv[]) {
 		printf("CLIENT: Error closing the socket.\n");
 		exit(EXIT_FAILURE);
 	}
-	exit(0);
+	return EXIT_SUCCESS;
+}
+void DieWithError(char *errorMessage)
+{
+    perror(errorMessage);
+    exit(1);
 }
