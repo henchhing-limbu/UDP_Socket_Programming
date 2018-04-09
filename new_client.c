@@ -100,6 +100,8 @@ int main (int argc, char *argv[]) {
 		// printf("CLIENT: Bytes sent = %li\n", bytesSent);
 	}
 	printf("CLIENT: Sent file to the server.\n");
+	
+	/*
 	// receiving a response
 	fromSize = sizeof(fromAddr);
 	// receive string from the server
@@ -112,9 +114,42 @@ int main (int argc, char *argv[]) {
 		printf("CLIENT: Received data from unknown source.\n");
 		exit(EXIT_FAILURE);
 	}
+	
 	// terminating the received data with null
 	buffer[MAX_LINE] = '\0';
 	printf("Received: %s\n", buffer);
+	*/
+	
+	// sending format to the server
+	// TODO: need to get format from the arguments
+	int format = 2;
+	if (sendto(sockfd, &format, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+		printf("CLIENT: Error sending format number to the server.\n");
+		exit(EXIT_FAILURE);
+	}
+	
+	// sending output file name to the server
+	char* outputFileName = "outputFile";
+	int outputFileSize = strlen(outputFileName);
+	if (sendto(sockfd, outputFileName, outputFileSize, 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+		printf("CLIENT: Error sending output file name to the server.\n");
+		exit(EXIT_FAILURE);
+	}
+	
+	// Getting the confirmation(error) message from the server
+	int errorMessage;
+	fromSize = sizeof(fromAddr);
+	if (recvfrom(sockfd, &errorMessage, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize) < 0) {
+		printf("CLIENT: Error receiving errorMessage from the server.\n");
+		exit(EXIT_FAILURE);
+	}
+	
+	if (errorMessage < 0)  {
+		printf("Format error\n");
+		exit(EXIT_FAILURE);
+	}
+	printf("Success.\n");
+	
 	if (close(sockfd) < 0) {
 		printf("CLIENT: Error closing the socket.\n");
 		exit(EXIT_FAILURE);
