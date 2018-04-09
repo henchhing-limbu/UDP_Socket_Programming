@@ -80,6 +80,7 @@ int main (int argc, char *argv[]) {
 	printf("CLIENT: Sent file size to the server.\n");
 	// sending data to the server
 	while (bytesToSend > 0) {
+		printf("CLIENT: Sending data to the server.\n");
 		if (bytesToSend > MAX_LINE) {
 			fread(buffer, 1, MAX_LINE, fp);
 			bytesSent = sendto(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
@@ -90,7 +91,8 @@ int main (int argc, char *argv[]) {
 		}
 		else {
 			fread(buffer, 1, bytesToSend, fp);
-			bytesSent = sendto(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
+			bytesSent = sendto(sockfd, buffer, bytesToSend, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
+			printf("CLIENT: bytesSent = %li\n", bytesSent);
 			if (bytesSent < 0) {
 				printf("CLIENT: sending data to the server failed.\n");
 				exit(EXIT_FAILURE);
@@ -101,25 +103,6 @@ int main (int argc, char *argv[]) {
 	}
 	printf("CLIENT: Sent file to the server.\n");
 	
-	/*
-	// receiving a response
-	fromSize = sizeof(fromAddr);
-	// receive string from the server
-	if ((recvStringLen = recvfrom(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &fromAddr, &fromSize)) != echoStringLen ) {
-		printf("CLIENT: recvfrom() failed.\n");
-		// DieWithError("recvfrom() failed.");
-		exit(EXIT_FAILURE);
-	}
-	if (servAddr.sin_addr.s_addr != fromAddr.sin_addr.s_addr) {
-		printf("CLIENT: Received data from unknown source.\n");
-		exit(EXIT_FAILURE);
-	}
-	
-	// terminating the received data with null
-	buffer[MAX_LINE] = '\0';
-	printf("Received: %s\n", buffer);
-	*/
-	
 	// sending format to the server
 	// TODO: need to get format from the arguments
 	int format = 2;
@@ -127,14 +110,23 @@ int main (int argc, char *argv[]) {
 		printf("CLIENT: Error sending format number to the server.\n");
 		exit(EXIT_FAILURE);
 	}
+	printf("CLIENT: Sent format = %d\n", format);
+
+	char* outputFileName = "outputFile";
+	int outputFileNameSize = strlen(outputFileName);
+	// sending output file name size to the server
+	if (sendto(sockfd, &outputFileNameSize, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+		printf("CLIENT: Error sending output file name size to the server.\n");
+		exit(EXIT_FAILURE);
+	}
+	printf("CLIENT: Sent output file name size = %d\n", outputFileNameSize);
 	
 	// sending output file name to the server
-	char* outputFileName = "outputFile";
-	int outputFileSize = strlen(outputFileName);
-	if (sendto(sockfd, outputFileName, outputFileSize, 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	if (sendto(sockfd, outputFileName, outputFileNameSize, 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
 		printf("CLIENT: Error sending output file name to the server.\n");
 		exit(EXIT_FAILURE);
 	}
+	printf("CLIENT: Sent output file name = %s\n", outputFileName);
 	
 	// Getting the confirmation(error) message from the server
 	int errorMessage;
