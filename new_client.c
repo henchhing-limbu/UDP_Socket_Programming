@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <string.h>
 
-// Global constant
-#define MAX_LINE		(25)
+// Global constants
+#define MAX_LINE		(1000)
 
 // function declarations
 void DieWithError(char *errorMessage);
@@ -21,9 +21,10 @@ int main (int argc, char *argv[]) {
 	unsigned int fromSize; 						// in-out of address size for recvfrom
 	char* ipAddress;							// IP address of server
 	char* echoString;							// string to send to server
-	char buffer[MAX_LINE+1];					// buffer for receiving echoed string
+	char buffer[MAX_LINE];						// buffer for receiving data
 	int echoStringLen;							// length of sent string
 	int recvStringLen;							// length of received string
+	unsigned long fileSize;						// fileSize
 	
 	// checking for correct number of arguemnts
 	if (argc < 4) {
@@ -59,25 +60,53 @@ int main (int argc, char *argv[]) {
 	servAddr.sin_addr.s_addr = inet_addr(ipAddress);	// server ip address
 	servAddr.sin_port = htons(port);					// server port
 	
-	// sending string to the server
-	int x ;
-	if ((x = sendto(sockfd, echoString, echoStringLen, 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) != echoStringLen) {
-		printf("echoString length: %d\n", echoStringLen);
-		printf("sentBytes length: %d\n", x);
-		printf("CLIENT: sendto sent different number of bytes than expected.\n");
+	FILE* fp = fopen("practice_project_test_file_1", "rb");
+	if (fp == NULL) {
+		printf("CLIENT: Failed to open the file.\n");
 		exit(EXIT_FAILURE);
 	}
-	printf("sent string length: %d\n", x);
-	printf("echo String Length: %d\n", echoStringLen);
+	fseek(fp, 0, SEEK_END);
+	fileSize = ftell(fp);
+	rewind(fp);
+	
+	unsigned long bytesToSend = fileSize;
+	unsigned long bytesSent;
+	// sending filesize to the server
+	printf("CLIENT: Filesize = %li\n", fileSize);
+	if ((sendto(sockfd, &fileSize, sizeof(long), 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
+		printf("CLIENT: Error sending filesize to the server.\n");
+		exit(EXIT_FAILURE);
+	}
+	printf("CLIENT: Sent file size to the server.\n");
+	// sending data to the server
+	while (bytesToSend > 0) {
+		if (bytesToSend > MAX_LINE) {
+			fread(buffer, 1, MAX_LINE, fp);
+			bytesSent = sendto(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
+			if (bytesSent < 0) {
+				printf("CLIENT: sending data to ther server failed.\n");
+				exit(EXIT_FAILURE);
+			}
+		}
+		else {
+			fread(buffer, 1, bytesToSend, fp);
+			bytesSent = sendto(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
+			if (bytesSent < 0) {
+				printf("CLIENT: sending data to the server failed.\n");
+				exit(EXIT_FAILURE);
+			}
+		}
+		bytesToSend -= bytesSent;
+		// printf("CLIENT: Bytes sent = %li\n", bytesSent);
+	}
+	printf("CLIENT: Sent file to the server.\n");
 	// receiving a response
 	fromSize = sizeof(fromAddr);
 	// receive string from the server
 	if ((recvStringLen = recvfrom(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &fromAddr, &fromSize)) != echoStringLen ) {
-		// printf("Sent string length: %d\n", echoStringLen);
-		// printf("received string length: %d\n", recvStringLen);
-		// printf("CLIENT: recvfrom() failed.\n");
-		DieWithError("recvfrom() failed.");
-		// exit(EXIT_FAILURE);
+		printf("CLIENT: recvfrom() failed.\n");
+		// DieWithError("recvfrom() failed.");
+		exit(EXIT_FAILURE);
 	}
 	if (servAddr.sin_addr.s_addr != fromAddr.sin_addr.s_addr) {
 		printf("CLIENT: Received data from unknown source.\n");
