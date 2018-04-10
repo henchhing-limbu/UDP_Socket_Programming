@@ -20,31 +20,50 @@ int main (int argc, char *argv[]) {
 	unsigned short port;						// server port
 	unsigned int fromSize; 						// in-out of address size for recvfrom
 	char* ipAddress;							// IP address of server
-	char* echoString;							// string to send to server
+	char* filePath;								// path to the input file
 	char buffer[MAX_LINE];						// buffer for receiving data
 	int echoStringLen;							// length of sent string
 	int recvStringLen;							// length of received string
 	unsigned long fileSize;						// fileSize
+	float lossProb;							// loss probability
+	unsigned int seed;							// random seed
+	unsigned int format;						// to format
+	char* outputFileName;						// output file name
+	
 	
 	// checking for correct number of arguemnts
-	if (argc < 4) {
+	if (argc < 8) {
 		printf("CLIENT: Not enough arguments.\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
-	else if (argc > 4) {
+	else if (argc > 8) {
 		printf("CLIENT: More than enough arguments.\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	ipAddress = argv[1];
-	echoString = argv[2];
-	printf("Input string: %s\n", echoString);
+	port = atoi(argv[2]);
+	printf("Port number: %d\n", port);
+	filePath = argv[3];
+	printf("File Path: %s\n", filePath);
+	/*
 	// checking for the string length
 	if ((echoStringLen = strlen(echoString)) > MAX_LINE) {
 		printf("CLIENT: Echo word too long.\n");
 		exit(EXIT_FAILURE);
 	}
-	port = atoi(argv[3]);
-	printf("Port number: %d\n", port);
+	*/
+	format = atoi(argv[4]);
+	if (format > 3 || format < 0) {
+		printf("CLIENT: Incorrect format number. Format number range is 0 to 3.\n");
+		exit(EXIT_FAILURE);
+	}
+	printf("Format: %d\n", format);
+	outputFileName = argv[5];
+	printf("output file name: %s\n", outputFileName);
+	lossProb = atof(argv[6]);
+	printf("loss probability: %.2f\n", lossProb);
+	seed = atoi(argv[7]);
+	printf("seed number: %d\n", seed);
 	
 	// creating UDP socket
 	if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
@@ -105,14 +124,12 @@ int main (int argc, char *argv[]) {
 	
 	// sending format to the server
 	// TODO: need to get format from the arguments
-	int format = 2;
 	if (sendto(sockfd, &format, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
 		printf("CLIENT: Error sending format number to the server.\n");
 		exit(EXIT_FAILURE);
 	}
 	printf("CLIENT: Sent format = %d\n", format);
 
-	char* outputFileName = "outputFile";
 	int outputFileNameSize = strlen(outputFileName);
 	// sending output file name size to the server
 	if (sendto(sockfd, &outputFileNameSize, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
