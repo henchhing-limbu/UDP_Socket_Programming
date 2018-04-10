@@ -6,12 +6,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "sendlib.h"
 
 // Global constants
 #define MAX_LINE		(1000)
 
 // function declarations
 void DieWithError(char *errorMessage);
+
 int main (int argc, char *argv[]) {
 	// socket descriptor
 	int sockfd;
@@ -91,31 +93,35 @@ int main (int argc, char *argv[]) {
 	unsigned long bytesToSend = fileSize;
 	unsigned long bytesSent;
 	// sending filesize to the server
-	printf("CLIENT: Filesize = %li\n", fileSize);
-	if ((sendto(sockfd, &fileSize, sizeof(long), 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
+	
+	// if ((sendto(sockfd, &fileSize, sizeof(long), 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
+	if ((lossy_sendto(lossProb, seed, sockfd, &fileSize, sizeof(long), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) { 	
 		printf("CLIENT: Error sending filesize to the server.\n");
 		exit(EXIT_FAILURE);
 	}
-	printf("CLIENT: Sent file size to the server.\n");
+	printf("CLIENT: Sent file size = %li\n", fileSize);
 	// sending data to the server
 	while (bytesToSend > 0) {
 		printf("CLIENT: Sending data to the server.\n");
 		if (bytesToSend > MAX_LINE) {
 			fread(buffer, 1, MAX_LINE, fp);
-			bytesSent = sendto(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
+			// bytesSent = sendto(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
+			bytesSent = (lossy_sendto(lossProb, seed, sockfd, buffer, MAX_LINE, (struct sockaddr*) &servAddr, sizeof(servAddr)));	
 			if (bytesSent < 0) {
 				printf("CLIENT: sending data to ther server failed.\n");
 				exit(EXIT_FAILURE);
 			}
+			printf("CLIENT: bytesSent = %li\n", bytesSent);
 		}
 		else {
 			fread(buffer, 1, bytesToSend, fp);
-			bytesSent = sendto(sockfd, buffer, bytesToSend, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
-			printf("CLIENT: bytesSent = %li\n", bytesSent);
+			// bytesSent = sendto(sockfd, buffer, bytesToSend, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
+			bytesSent = lossy_sendto(lossProb, seed, sockfd, buffer, bytesToSend, (struct sockaddr*) &servAddr, sizeof(servAddr));
 			if (bytesSent < 0) {
 				printf("CLIENT: sending data to the server failed.\n");
 				exit(EXIT_FAILURE);
 			}
+			printf("CLIENT: bytesSent = %li\n", bytesSent);
 		}
 		bytesToSend -= bytesSent;
 		// printf("CLIENT: Bytes sent = %li\n", bytesSent);
@@ -124,7 +130,8 @@ int main (int argc, char *argv[]) {
 	
 	// sending format to the server
 	// TODO: need to get format from the arguments
-	if (sendto(sockfd, &format, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	// if (sendto(sockfd, &format, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	if ((lossy_sendto(lossProb, seed, sockfd, &format, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 		printf("CLIENT: Error sending format number to the server.\n");
 		exit(EXIT_FAILURE);
 	}
@@ -132,14 +139,16 @@ int main (int argc, char *argv[]) {
 
 	int outputFileNameSize = strlen(outputFileName);
 	// sending output file name size to the server
-	if (sendto(sockfd, &outputFileNameSize, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	// if (sendto(sockfd, &outputFileNameSize, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	if ((lossy_sendto(lossProb, seed, sockfd, &outputFileNameSize, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 		printf("CLIENT: Error sending output file name size to the server.\n");
 		exit(EXIT_FAILURE);
 	}
 	printf("CLIENT: Sent output file name size = %d\n", outputFileNameSize);
 	
 	// sending output file name to the server
-	if (sendto(sockfd, outputFileName, outputFileNameSize, 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	// if (sendto(sockfd, outputFileName, outputFileNameSize, 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	if ((lossy_sendto(lossProb, seed, sockfd, outputFileName, outputFileNameSize, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 		printf("CLIENT: Error sending output file name to the server.\n");
 		exit(EXIT_FAILURE);
 	}

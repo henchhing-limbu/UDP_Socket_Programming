@@ -2,7 +2,6 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include "helper.h"
 
 #include <string.h>
 #include <stdlib.h>
