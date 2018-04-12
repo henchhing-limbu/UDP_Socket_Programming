@@ -87,6 +87,8 @@ int main(int argc, char* argv[]) {
 					printf("SERVER: Error receiving data from the client.\n");
 					exit(EXIT_FAILURE);
 				}
+				printf("SERVER: Bytes received = %li\n", bytesReceived);
+				printf("SERVER: This is the last packet received.\n");
 			}
 			// printf("SERVER: Bytes received = %li\n", bytesReceived);
 			fwrite(buffer, 1, bytesReceived, fp);

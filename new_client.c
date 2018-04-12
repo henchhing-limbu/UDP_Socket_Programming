@@ -94,6 +94,8 @@ int main (int argc, char *argv[]) {
 	unsigned long bytesSent;
 	// sending filesize to the server
 	
+	// TODO: setsockopt for setting timeout
+	// setsockopt(
 	// if ((sendto(sockfd, &fileSize, sizeof(long), 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 	if ((lossy_sendto(lossProb, seed, sockfd, &fileSize, sizeof(long), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) { 	
 		printf("CLIENT: Error sending filesize to the server.\n");
