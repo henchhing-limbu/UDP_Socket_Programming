@@ -6,13 +6,19 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>								// for sigaction()
 #include "sendlib.h"
+#include <errno.h>
 
 // Global constants
-#define MAX_LINE		(1000)
+#define MAX_LINE		 (1000)
+#define TIMEOUT_SECS	 (6)
+#define MAX_TRIES		 (6)
 
+int tries = 0;
 // function declarations
-void DieWithError(char *errorMessage);
+void DieWithError(char *errorMessage);			// Error handling function
+void CatchAlarm(int ignored);					// Handler for SIGALRM
 
 int main (int argc, char *argv[]) {
 	// socket descriptor
@@ -27,11 +33,11 @@ int main (int argc, char *argv[]) {
 	int echoStringLen;							// length of sent string
 	int recvStringLen;							// length of received string
 	unsigned long fileSize;						// fileSize
-	float lossProb;							// loss probability
+	float lossProb;								// loss probability
 	unsigned int seed;							// random seed
 	unsigned int format;						// to format
 	char* outputFileName;						// output file name
-	
+	struct sigaction myAction;					// For setting signal handler
 	
 	// checking for correct number of arguemnts
 	if (argc < 8) {
@@ -73,6 +79,13 @@ int main (int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 	
+	// set signal handler for alarm signal
+	myAction.sa_handler = CatchAlarm;
+	
+	if (sigfillset(&myAction.sa_mask) < 0)				// block everything in handler
+		DieWithError("sigfillset() failed");
+	myAction.sa_flags = 0;
+	
 	// constructing the server address structure
 	// filling the server address structure with 0
 	memset(&servAddr, 0, sizeof(servAddr));
@@ -101,6 +114,30 @@ int main (int argc, char *argv[]) {
 		printf("CLIENT: Error sending filesize to the server.\n");
 		exit(EXIT_FAILURE);
 	}
+	
+	fromSize = sizeof(fromAddr);
+	// setting the timeout
+	alarm(TIMEOUT_SECS);
+	int x;
+	while ((x = recvfrom(sockfd, &fileSize, sizeof(long), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
+		// alarm went off
+		if (errno == EINTR) {
+			if (tries < MAX_TRIES) {
+				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
+				if ((lossy_sendto(lossProb, seed, sockfd, &fileSize, sizeof(long), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
+					DieWithError("sendto() failed");
+					alarm(TIMEOUT_SECS);
+				}
+			}
+			else
+				DieWithError("No Response");
+		}
+		else
+			DieWithError("recvfrom() failed");
+	}
+	// recvfrom() got something -- cancelling the timeout
+	alarm(0);
+	
 	printf("CLIENT: Sent file size = %li\n", fileSize);
 	// sending data to the server
 	while (bytesToSend > 0) {
@@ -158,7 +195,8 @@ int main (int argc, char *argv[]) {
 	
 	// Getting the confirmation(error) message from the server
 	int errorMessage;
-	fromSize = sizeof(fromAddr);
+	// TODO: check it
+	// fromSize = sizeof(fromAddr);
 	if (recvfrom(sockfd, &errorMessage, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize) < 0) {
 		printf("CLIENT: Error receiving errorMessage from the server.\n");
 		exit(EXIT_FAILURE);
