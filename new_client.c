@@ -12,8 +12,8 @@
 
 // Global constants
 #define MAX_LINE		 (1000)
-#define TIMEOUT_SECS	 (6)
-#define MAX_TRIES		 (6)
+#define TIMEOUT_SECS	 (5)
+#define MAX_TRIES		 (5)
 
 int tries = 0;
 // function declarations
@@ -86,6 +86,9 @@ int main (int argc, char *argv[]) {
 		DieWithError("sigfillset() failed");
 	myAction.sa_flags = 0;
 	
+	if (sigaction(SIGALRM, &myAction, 0) < 0)
+		DieWithError("sigaction() failed for SIGALRM");
+	
 	// constructing the server address structure
 	// filling the server address structure with 0
 	memset(&servAddr, 0, sizeof(servAddr));
@@ -114,20 +117,24 @@ int main (int argc, char *argv[]) {
 		printf("CLIENT: Error sending filesize to the server.\n");
 		exit(EXIT_FAILURE);
 	}
+	printf("CLIENT: Sent file size = %li\n", fileSize);
 	
 	fromSize = sizeof(fromAddr);
 	// setting the timeout
 	alarm(TIMEOUT_SECS);
 	int x;
-	while ((x = recvfrom(sockfd, &fileSize, sizeof(long), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
+	int ack = 0;
+	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
 		// alarm went off
+		printf("Entered here: %d\n", x);
+		printf("Received Acknowledgement: %d\n", ack);
 		if (errno == EINTR) {
 			if (tries < MAX_TRIES) {
 				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
 				if ((lossy_sendto(lossProb, seed, sockfd, &fileSize, sizeof(long), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 					DieWithError("sendto() failed");
-					alarm(TIMEOUT_SECS);
 				}
+				alarm(TIMEOUT_SECS);
 			}
 			else
 				DieWithError("No Response");
@@ -137,8 +144,8 @@ int main (int argc, char *argv[]) {
 	}
 	// recvfrom() got something -- cancelling the timeout
 	alarm(0);
+	printf("CLIENT: Received acknowledgement.\n");
 	
-	printf("CLIENT: Sent file size = %li\n", fileSize);
 	// sending data to the server
 	while (bytesToSend > 0) {
 		printf("CLIENT: Sending data to the server.\n");
@@ -201,7 +208,6 @@ int main (int argc, char *argv[]) {
 		printf("CLIENT: Error receiving errorMessage from the server.\n");
 		exit(EXIT_FAILURE);
 	}
-	
 	if (errorMessage < 0)  {
 		printf("Format error\n");
 		exit(EXIT_FAILURE);
@@ -218,4 +224,8 @@ void DieWithError(char *errorMessage)
 {
     perror(errorMessage);
     exit(1);
+}
+void CatchAlarm(int ignored)
+{
+	tries += 1;
 }

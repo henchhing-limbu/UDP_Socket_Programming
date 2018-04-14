@@ -68,6 +68,13 @@ int main(int argc, char* argv[]) {
 		}
 		printf("SERVER: Received file size = %li\n", recvSize);
 		
+		int ack = 1;
+		// sending acknowledgment for the received file size
+		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
+			printf("SERVER: Error sending acknowledgment for the filesize.\n");
+			exit(EXIT_FAILURE);
+		}
+		
 		unsigned long bytesToReceive = recvSize;
 		unsigned long bytesReceived;
 		
