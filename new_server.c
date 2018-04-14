@@ -74,6 +74,7 @@ int main(int argc, char* argv[]) {
 			printf("SERVER: Error sending acknowledgment for the filesize.\n");
 			exit(EXIT_FAILURE);
 		}
+		printf("SERVER: Sent acknowledgment for file size. Ack = %d\n", ack);
 		
 		unsigned long bytesToReceive = recvSize;
 		unsigned long bytesReceived;
@@ -82,22 +83,31 @@ int main(int argc, char* argv[]) {
 		FILE* fp = fopen("Received","wb");
 		
 		while (bytesToReceive > 0) {
+			printf("SERVER: Bytes To Receive = %li\n", bytesToReceive);
 			printf("SERVER: Receiving data from the client.\n");
 			if (bytesToReceive > MAX_LINE) {
 				if ((bytesReceived = recvfrom(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 					printf("SERVER: Error receiving data from the client.\n");
 					exit(EXIT_FAILURE);
 				}
+				if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
+					printf("SERVER: Error sending acknowledgment to the client.\n");
+					exit(EXIT_FAILURE);
+				}
 			}
 			else {
+				printf("This is the last packet.\n");
 				if ((bytesReceived = recvfrom(sockfd, buffer, bytesToReceive, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 					printf("SERVER: Error receiving data from the client.\n");
 					exit(EXIT_FAILURE);
 				}
+				if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
+					printf("SERVER: Error sending acknowledgment to the client.\n");
+					exit(EXIT_FAILURE);
+				}
 				printf("SERVER: Bytes received = %li\n", bytesReceived);
-				printf("SERVER: This is the last packet received.\n");
 			}
-			// printf("SERVER: Bytes received = %li\n", bytesReceived);
+			printf("SERVER: Bytes received = %li\n", bytesReceived);
 			fwrite(buffer, 1, bytesReceived, fp);
 			bytesToReceive -= bytesReceived;
 		}
@@ -112,6 +122,12 @@ int main(int argc, char* argv[]) {
 			exit(EXIT_FAILURE);
 		}
 		printf("SERVER: Received format = %d\n", format);
+		
+		// sending acknowledgment for the format to the server
+		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
+			printf("SERVER: Error sending acknowledgment for the format to the client.\n");
+			exit(EXIT_FAILURE);
+		}
 		
 		// receiving output file name size
 		int outputFileNameSize;
