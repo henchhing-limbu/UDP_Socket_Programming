@@ -7,18 +7,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>								// for sigaction()
-#include "sendlib.h"
 #include <errno.h>
+// #include "sendlib.h"
+#include "helper.h"
+
 
 // Global constants
 #define MAX_LINE		 (1000)
-#define TIMEOUT_SECS	 (5)
-#define MAX_TRIES		 (5)
 
-int tries = 0;
 // function declarations
-void DieWithError(char *errorMessage);			// Error handling function
-void CatchAlarm(int ignored);					// Handler for SIGALRM
 
 int main (int argc, char *argv[]) {
 	// socket descriptor
@@ -111,9 +108,11 @@ int main (int argc, char *argv[]) {
 	int x;
 	int ack = 0;
 	fromSize = sizeof(fromAddr);
+	
+	timeout_loop(lossProb, seed, sockfd, &fileSize, sizeof(long), ack, (struct sockaddr*) &fromAddr, fromSize, 
+			(struct sockaddr*) &servAddr, sizeof(servAddr)); 
+	/*
 	// sending filesize to the server
-	// TODO: setsockopt for setting timeout
-	// setsockopt(
 	// if ((sendto(sockfd, &fileSize, sizeof(long), 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 	if ((lossy_sendto(lossProb, seed, sockfd, &fileSize, sizeof(long), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) { 	
 		printf("CLIENT: Error sending filesize to the server.\n");
@@ -124,6 +123,7 @@ int main (int argc, char *argv[]) {
 	// TODO: Change
 	// setting the timeout
 	alarm(TIMEOUT_SECS);
+	timeout_loop(sockfd, &ack, sizeof(int), (struct sockaddr*) &fromAddr, &fromSize);
 	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
 		// alarm went off
 		printf("Entered here: %d\n", x);
@@ -142,18 +142,22 @@ int main (int argc, char *argv[]) {
 		else
 			DieWithError("recvfrom() failed");
 	}
+	
 	// recvfrom() got something -- cancelling the timeout
 	alarm(0);
 	// restting tries
 	tries = 0;
 	printf("CLIENT: Received acknowledgement.\n");
-	// ************************
+	*/
 	
 	// sending data to the server
 	while (bytesToSend > 0) {
 		printf("CLIENT: Sending data to the server.\n");
 		if (bytesToSend > MAX_LINE) {
 			fread(buffer, 1, MAX_LINE, fp);
+			bytesSent = timeout_loop(lossProb, seed, sockfd, buffer, MAX_LINE, ack, (struct sockaddr*) &fromAddr, fromSize, 
+			(struct sockaddr*) &servAddr, sizeof(servAddr));
+			/*
 			// bytesSent = sendto(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
 			bytesSent = (lossy_sendto(lossProb, seed, sockfd, buffer, MAX_LINE, (struct sockaddr*) &servAddr, sizeof(servAddr)));	
 			if (bytesSent < 0) {
@@ -185,11 +189,15 @@ int main (int argc, char *argv[]) {
 			alarm(0);
 			// resetting tries
 			tries = 0;
+			*/
 			printf("CLIENT: Received acknowledgement.\n");
 		}
-		// ***********
+		
 		else {
 			fread(buffer, 1, bytesToSend, fp);
+			bytesSent = timeout_loop(lossProb, seed, sockfd, buffer, bytesToSend, ack, (struct sockaddr*) &fromAddr, fromSize,
+			(struct sockaddr*) &servAddr, sizeof(servAddr));
+			/*
 			// bytesSent = sendto(sockfd, buffer, bytesToSend, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
 			bytesSent = lossy_sendto(lossProb, seed, sockfd, buffer, bytesToSend, (struct sockaddr*) &servAddr, sizeof(servAddr));
 			if (bytesSent < 0) {
@@ -222,6 +230,7 @@ int main (int argc, char *argv[]) {
 			alarm(0);
 			// resetting tries
 			tries = 0;
+			*/
 			printf("CLIENT: Received acknowledgement.\n");
 			// *****************
 		}
@@ -231,8 +240,9 @@ int main (int argc, char *argv[]) {
 	printf("CLIENT: Sent file to the server.\n");
 	
 	// sending format to the server
-	// TODO: need to get format from the arguments
-	// if (sendto(sockfd, &format, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	timeout_loop(lossProb, seed, sockfd, &format, sizeof(int), ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
+	sizeof(servAddr));
+	/*
 	if ((lossy_sendto(lossProb, seed, sockfd, &format, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 		printf("CLIENT: Error sending format number to the server.\n");
 		exit(EXIT_FAILURE);
@@ -261,11 +271,14 @@ int main (int argc, char *argv[]) {
 	alarm(0);
 	// resetting tries
 	tries = 0;
+	*/
 	printf("CLIENT: Acknowledgement for format number received.\n");
 	
 	int outputFileNameSize = strlen(outputFileName);
 	// sending output file name size to the server
-	// if (sendto(sockfd, &outputFileNameSize, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	timeout_loop(lossProb, seed, sockfd, &format, sizeof(int), ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
+	sizeof(servAddr));
+	/*
 	if ((lossy_sendto(lossProb, seed, sockfd, &outputFileNameSize, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 		printf("CLIENT: Error sending output file name size to the server.\n");
 		exit(EXIT_FAILURE);
@@ -295,10 +308,13 @@ int main (int argc, char *argv[]) {
 	alarm(0);
 	// resetting tries
 	tries = 0;
+	*/
 	printf("CLIENT: Acknowledgment for output file name size received.\n");
 	
 	// sending output file name to the server
-	// if (sendto(sockfd, outputFileName, outputFileNameSize, 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
+	timeout_loop(lossProb, seed, sockfd, outputFileName, outputFileNameSize, ack, (struct sockaddr*) &fromAddr, fromSize, 
+	(struct sockaddr*) &servAddr, sizeof(servAddr));
+	/*
 	if ((lossy_sendto(lossProb, seed, sockfd, outputFileName, outputFileNameSize, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
 		printf("CLIENT: Error sending output file name to the server.\n");
 		exit(EXIT_FAILURE);
@@ -328,6 +344,7 @@ int main (int argc, char *argv[]) {
 	alarm(0);
 	// resetting tries
 	tries = 0;
+	*/
 	printf("CLIENT: Acknowledgment for output file name size received.\n");
 	
 	
@@ -350,13 +367,4 @@ int main (int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 	return EXIT_SUCCESS;
-}
-void DieWithError(char *errorMessage)
-{
-    perror(errorMessage);
-    exit(1);
-}
-void CatchAlarm(int ignored)
-{
-	tries += 1;
 }

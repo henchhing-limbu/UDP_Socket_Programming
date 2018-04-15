@@ -1,6 +1,4 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <stdlib.h>
+#include "sendlib.h"
 /* 
  * This function must NOT be modified.
  */
