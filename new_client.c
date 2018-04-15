@@ -238,7 +238,31 @@ int main (int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 	printf("CLIENT: Sent format = %d\n", format);
-
+	// TODO: Change
+	alarm(TIMEOUT_SECS);
+	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
+		// alarm went off
+		printf("Received Acknowledgement: %d\n", ack);
+		if (errno == EINTR) {
+			if (tries < MAX_TRIES) {
+				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
+				if ((lossy_sendto(lossProb, seed, sockfd, &format, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
+					DieWithError("sendto() failed");
+				}
+					alarm(TIMEOUT_SECS);
+			}
+			else
+				DieWithError("No Response");
+		}
+		else
+			DieWithError("recvfrom() failed");
+	}
+	// recvfrom() got something -- cancelling the timeout
+	alarm(0);
+	// resetting tries
+	tries = 0;
+	printf("CLIENT: Acknowledgement for format number received.\n");
+	
 	int outputFileNameSize = strlen(outputFileName);
 	// sending output file name size to the server
 	// if (sendto(sockfd, &outputFileNameSize, sizeof(int), 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
@@ -248,6 +272,31 @@ int main (int argc, char *argv[]) {
 	}
 	printf("CLIENT: Sent output file name size = %d\n", outputFileNameSize);
 	
+	// TODO: Change
+	alarm(TIMEOUT_SECS);
+	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
+		// alarm went off
+		printf("Received Acknowledgement: %d\n", ack);
+		if (errno == EINTR) {
+			if (tries < MAX_TRIES) {
+				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
+				if ((lossy_sendto(lossProb, seed, sockfd, &outputFileNameSize, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
+					DieWithError("sendto() failed");
+				}
+					alarm(TIMEOUT_SECS);
+			}
+			else
+				DieWithError("No Response");
+		}
+		else
+			DieWithError("recvfrom() failed");
+	}
+	// recvfrom() got something -- cancelling the timeout
+	alarm(0);
+	// resetting tries
+	tries = 0;
+	printf("CLIENT: Acknowledgment for output file name size received.\n");
+	
 	// sending output file name to the server
 	// if (sendto(sockfd, outputFileName, outputFileNameSize, 0, (struct sockaddr*) &servAddr, sizeof(servAddr)) < 0) {
 	if ((lossy_sendto(lossProb, seed, sockfd, outputFileName, outputFileNameSize, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
@@ -255,6 +304,32 @@ int main (int argc, char *argv[]) {
 		exit(EXIT_FAILURE);
 	}
 	printf("CLIENT: Sent output file name = %s\n", outputFileName);
+	
+	// TODO: Change
+	alarm(TIMEOUT_SECS);
+	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
+		// alarm went off
+		printf("Received Acknowledgement: %d\n", ack);
+		if (errno == EINTR) {
+			if (tries < MAX_TRIES) {
+				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
+				if ((lossy_sendto(lossProb, seed, sockfd, outputFileName, outputFileNameSize, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
+					DieWithError("sendto() failed");
+				}
+					alarm(TIMEOUT_SECS);
+			}
+			else
+				DieWithError("No Response");
+		}
+		else
+			DieWithError("recvfrom() failed");
+	}
+	// recvfrom() got something -- cancelling the timeout
+	alarm(0);
+	// resetting tries
+	tries = 0;
+	printf("CLIENT: Acknowledgment for output file name size received.\n");
+	
 	
 	// Getting the confirmation(error) message from the server
 	int errorMessage;

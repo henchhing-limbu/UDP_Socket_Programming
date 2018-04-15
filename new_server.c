@@ -137,6 +137,12 @@ int main(int argc, char* argv[]) {
 		}
 		printf("SERVER: Received output file name size = %d\n", outputFileNameSize);
 		
+		// sending acknowledgment for the output file name size to the client
+		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
+			printf("SERVER: Error sending acknowledgement for the output file name size to the client.\n");
+			exit(EXIT_FAILURE);
+		}
+		
 		// receiving the output file name from the client
 		char outputFileName[outputFileNameSize];
 		if ((recvfrom(sockfd, outputFileName, outputFileNameSize, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
@@ -144,6 +150,12 @@ int main(int argc, char* argv[]) {
 			exit(EXIT_FAILURE);
 		}
 		printf("SERVER: Received output file name = %s\n", outputFileName);
+		
+		// sending acknowledgement for the output file name to the client
+		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
+			printf("SERVER: Error sending acknowledgement for the output file name to the client.\n");
+			exit(EXIT_FAILURE);
+		}
 		
 		FILE* destfile = fopen(outputFileName, "wb");
 		fp = fopen("Received","rb");
