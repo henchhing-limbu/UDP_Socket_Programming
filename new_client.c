@@ -30,7 +30,7 @@ int main (int argc, char *argv[]) {
 	int echoStringLen;							// length of sent string
 	int recvStringLen;							// length of received string
 	unsigned long fileSize;						// fileSize
-	unsigned long seed;							// random seed
+	unsigned int seed;							// random seed
 	unsigned long format;						// to format
 	unsigned long outputFileNameSize;			// output file name size
 	float lossProb;								// loss probability

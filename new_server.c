@@ -26,10 +26,11 @@ int main(int argc, char* argv[]) {
 	struct sockaddr_in servAddr;							// server address
 	struct sockaddr_in clntAddr;							// client address
 	unsigned int clntAddrLen;								// length of incoming message
-	char buffer[MAX_LINE + 1];									// buffer for data
 	unsigned short port;									// port number
-	// unsigned long recvSize;									// size of received data
-	char numBuffer[2];									// receives numbers from client
+	unsigned long fileSize;									// size of received data
+	unsigned long format;
+	char buffer[MAX_LINE];									// buffer for received data
+	char packet[MAX_LINE + 1];								// packet coming from the client.
 	unsigned int seed;										// random seed
 	float lossProb;											// loss probability
 	struct sigaction myAction;								// for setting signal handler
@@ -88,16 +89,19 @@ int main(int argc, char* argv[]) {
 		char ack[2];
 		
 		// receiving file size from the client
-		if ((recvfrom(sockfd, numBuffer, 2, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
+		if ((recvfrom(sockfd, packet, sizeof(fileSize) + 1, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 			printf("SERVER: Error receiving the file size from the client.\n");
 			exit(EXIT_FAILURE);
 		}
 		printf("SERVER: Received file size.\n");
 		
-		ack[1] = numBuffer[0];
+		ack[1] = packet[0];
 		
-		unsigned long bytesToReceive = numBuffer[1];
+		unsigned long bytesToReceive;
 		unsigned long bytesReceived;
+		// getting bytesToReceive fromt the packet
+		memcpy(&bytesToReceive, packet + 1, sizeof(fileSize));
+		
 		unsigned int clntAddrLen = sizeof(clntAddr);
 		unsigned int servAddrLen = sizeof(servAddr);
 				
@@ -109,7 +113,7 @@ int main(int argc, char* argv[]) {
 			printf("SERVER: Receiving data from the client.\n");
 			if (bytesToReceive > MAX_LINE) {
 				// sending acknowledgment for the received file size
-				bytesReceived = sendAndWaitServ(lossProb, seed, sockfd, buffer, MAX_LINE + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
+				bytesReceived = sendAndWaitServ(lossProb, seed, sockfd, packet, MAX_LINE + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
 				printf("SERVER: Received data packet fromt the client.\n");
 				/*
 				if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
@@ -128,11 +132,8 @@ int main(int argc, char* argv[]) {
 				*/
 			}
 			else {
-				// creating packet
-				ack[0] = 1;
-				// TODO: ack[1]
 				printf("This is the last packet.\n");
-				bytesReceived = sendAndWaitServ(lossProb, seed, sockfd, buffer, MAX_LINE + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
+				bytesReceived = sendAndWaitServ(lossProb, seed, sockfd, packet, fileSize + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
 				/*
 				if ((bytesReceived = recvfrom(sockfd, buffer, bytesToReceive, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 					printf("SERVER: Error receiving data from the client.\n");
@@ -147,49 +148,65 @@ int main(int argc, char* argv[]) {
 			}
 			printf("SERVER: Bytes received = %li\n", bytesReceived);
 			// TODO: change the addition of sequence number in every packet
-			fwrite(buffer + 1, 1, bytesReceived - 1, fp);
+			fwrite(packet + 1, 1, bytesReceived - 1, fp);
 			bytesToReceive -= bytesReceived;
 		}
 		printf("SERVER: Received file.\n");
 		
 		fclose(fp);
 		
+		// sending acknowledgment for the data received
 		// receiving the file foramt here
-		unsigned int format;
+		sendAndWaitServ(lossProb, seed, sockfd, packet, sizeof(long) + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
+		/*
 		if ((recvfrom(sockfd, &format, sizeof(int), 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 			printf("SERVER: Error receiving the file format.\n");
 			exit(EXIT_FAILURE);
 		}
-		printf("SERVER: Received format = %d\n", format);
+		*/
+		memcpy(&format, packet + 1, sizeof(long));
+		printf("SERVER: Received format = %li\n", format);
 		
-		// sending acknowledgment for the format to the server
+		// sending acknowledgment to the server
+		// receiving output filename size from the server
+		unsigned long outputFileNameSize;
+		sendAndWaitServ(lossProb, seed, sockfd, packet, sizeof(long) + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
+		/*
 		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
 			printf("SERVER: Error sending acknowledgment for the format to the client.\n");
 			exit(EXIT_FAILURE);
 		}
-		
+		*/
+		memcpy(&outputFileNameSize, packet + 1, sizeof(long));
+		printf("SERVER: Received output file name size = %li\n", outputFileNameSize);
+		/*
 		// receiving output file name size
-		int outputFileNameSize;
 		if ((recvfrom(sockfd, &outputFileNameSize, sizeof(int), 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 			printf("SERVER: Error receiving file name size from the client.\n");
 			exit(EXIT_FAILURE);
 		}
 		printf("SERVER: Received output file name size = %d\n", outputFileNameSize);
+		*/
 		
 		// sending acknowledgment for the output file name size to the client
+		// receiving output file name from the client.
+		char outputFileName[outputFileNameSize];
+		sendAndWaitServ(lossProb, seed, sockfd, packet, outputFileNameSize + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
+		memcpy(outputFileName, packet + 1, outputFileNameSize);
+		printf("SERVER: Received output file name = %s\n", outputFileName);
+		/*
 		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
 			printf("SERVER: Error sending acknowledgement for the output file name size to the client.\n");
 			exit(EXIT_FAILURE);
 		}
-		
 		// receiving the output file name from the client
-		char outputFileName[outputFileNameSize];
 		if ((recvfrom(sockfd, outputFileName, outputFileNameSize, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 			printf("SERVER: Error receiving output file name from the client.\n");
 			exit(EXIT_FAILURE);
 		}
-		printf("SERVER: Received output file name = %s\n", outputFileName);
+		*/
 		
+		// TODO: send with loss probability
 		// sending acknowledgement for the output file name to the client
 		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
 			printf("SERVER: Error sending acknowledgement for the output file name to the client.\n");
@@ -422,13 +439,11 @@ void type0ToType1(uint8_t* amountArray, uint16_t* numbers, FILE* outputStream, i
 }
 
 void type1ToType0(FILE* outputStream, uint8_t amount, uint8_t* numbers, int count) {
-	// TODO: 
 	// changing the first byte
 	uint8_t type = 0;
 	fwrite(&type, 1, 1, outputStream);
 	
 	// writing the decimal amount to the file
-	// TODO: Fix this
 	// Convert to a byte/ maybe more than a byte
 	fwrite(&amount, 1, 1, outputStream);
 	int start = 0;
