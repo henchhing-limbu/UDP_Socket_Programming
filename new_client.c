@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>								// for sigaction()
-#include <errno.h>
+// #include <errno.h>
 // #include "sendlib.h"
 #include "helper.h"
 
@@ -30,11 +30,14 @@ int main (int argc, char *argv[]) {
 	int echoStringLen;							// length of sent string
 	int recvStringLen;							// length of received string
 	unsigned long fileSize;						// fileSize
+	unsigned long seed;							// random seed
+	unsigned long format;						// to format
+	unsigned long outputFileNameSize;			// output file name size
 	float lossProb;								// loss probability
-	unsigned int seed;							// random seed
-	unsigned int format;						// to format
-	char* outputFileName;						// output file name
 	struct sigaction myAction;					// For setting signal handler
+	char numBuffer[2];							// sending numbers to the server
+	char* outputFileName;						// output file name
+	char packet[MAX_LINE+1];
 	
 	// checking for correct number of arguemnts
 	if (argc < 8) {
@@ -50,25 +53,18 @@ int main (int argc, char *argv[]) {
 	printf("Port number: %d\n", port);
 	filePath = argv[3];
 	printf("File Path: %s\n", filePath);
-	/*
-	// checking for the string length
-	if ((echoStringLen = strlen(echoString)) > MAX_LINE) {
-		printf("CLIENT: Echo word too long.\n");
-		exit(EXIT_FAILURE);
-	}
-	*/
 	format = atoi(argv[4]);
 	if (format > 3 || format < 0) {
 		printf("CLIENT: Incorrect format number. Format number range is 0 to 3.\n");
 		exit(EXIT_FAILURE);
 	}
-	printf("Format: %d\n", format);
+	printf("Format: %li\n", format);
 	outputFileName = argv[5];
 	printf("output file name: %s\n", outputFileName);
 	lossProb = atof(argv[6]);
 	printf("loss probability: %.2f\n", lossProb);
 	seed = atoi(argv[7]);
-	printf("seed number: %d\n", seed);
+	printf("seed number: %li\n", seed);
 	
 	// creating UDP socket
 	if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
@@ -94,7 +90,7 @@ int main (int argc, char *argv[]) {
 	servAddr.sin_addr.s_addr = inet_addr(ipAddress);	// server ip address
 	servAddr.sin_port = htons(port);					// server port
 	
-	FILE* fp = fopen("practice_project_test_file_1", "rb");
+	FILE* fp = fopen(filePath, "rb");
 	if (fp == NULL) {
 		printf("CLIENT: Failed to open the file.\n");
 		exit(EXIT_FAILURE);
@@ -105,252 +101,96 @@ int main (int argc, char *argv[]) {
 	
 	unsigned long bytesToSend = fileSize;
 	unsigned long bytesSent;
-	int x;
-	int ack = 0;
+	// size of clnt address
 	fromSize = sizeof(fromAddr);
 	
-	timeout_loop(lossProb, seed, sockfd, &fileSize, sizeof(long), ack, (struct sockaddr*) &fromAddr, fromSize, 
+	// sequence number
+	char seqNum = 0;
+	// initializing ack to be 0
+	char ack[2];
+	
+	// creating file size buffer
+	int x = sizeof(long);
+	char fileSizeBuffer[x];
+	memcpy(fileSizeBuffer, &fileSize, x);
+	
+	// makes file size packet
+	makePacket(packet, seqNum, fileSizeBuffer, x);
+	
+	// sending file size packet to the server
+	printf("CLIENT: Sending filesize to the server.\n");
+	sendAndWaitClnt(lossProb, seed, sockfd, packet, x + 1, ack, (struct sockaddr*) &fromAddr, fromSize, 
 			(struct sockaddr*) &servAddr, sizeof(servAddr)); 
-	/*
-	// sending filesize to the server
-	// if ((sendto(sockfd, &fileSize, sizeof(long), 0, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-	if ((lossy_sendto(lossProb, seed, sockfd, &fileSize, sizeof(long), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) { 	
-		printf("CLIENT: Error sending filesize to the server.\n");
-		exit(EXIT_FAILURE);
-	}
-	printf("CLIENT: Sent file size = %li\n", fileSize);
-	
-	// TODO: Change
-	// setting the timeout
-	alarm(TIMEOUT_SECS);
-	timeout_loop(sockfd, &ack, sizeof(int), (struct sockaddr*) &fromAddr, &fromSize);
-	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
-		// alarm went off
-		printf("Entered here: %d\n", x);
-		printf("Received Acknowledgement: %d\n", ack);
-		if (errno == EINTR) {
-			if (tries < MAX_TRIES) {
-				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
-				if ((lossy_sendto(lossProb, seed, sockfd, &fileSize, sizeof(long), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-					DieWithError("sendto() failed");
-				}
-				alarm(TIMEOUT_SECS);
-			}
-			else
-				DieWithError("No Response");
-		}
-		else
-			DieWithError("recvfrom() failed");
-	}
-	
-	// recvfrom() got something -- cancelling the timeout
-	alarm(0);
-	// restting tries
-	tries = 0;
-	printf("CLIENT: Received acknowledgement.\n");
-	*/
+	printf("CLIENT: Received acknowledgment from the server.\n");
 	
 	// sending data to the server
 	while (bytesToSend > 0) {
-		printf("CLIENT: Sending data to the server.\n");
+		printf("CLIENT: Sending file data to the server.\n");
 		if (bytesToSend > MAX_LINE) {
 			fread(buffer, 1, MAX_LINE, fp);
-			bytesSent = timeout_loop(lossProb, seed, sockfd, buffer, MAX_LINE, ack, (struct sockaddr*) &fromAddr, fromSize, 
+			// TODO: change
+			makePacket(packet, seqNum, buffer, MAX_LINE);
+			// sending packet to the server
+			printf("CLIENT: Sending data to the server.\n");
+			bytesSent = sendAndWaitClnt(lossProb, seed, sockfd, packet, MAX_LINE + 1, ack, (struct sockaddr*) &fromAddr, fromSize, 
 			(struct sockaddr*) &servAddr, sizeof(servAddr));
-			/*
-			// bytesSent = sendto(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
-			bytesSent = (lossy_sendto(lossProb, seed, sockfd, buffer, MAX_LINE, (struct sockaddr*) &servAddr, sizeof(servAddr)));	
-			if (bytesSent < 0) {
-				printf("CLIENT: sending data to ther server failed.\n");
-				exit(EXIT_FAILURE);
-			}
-			printf("CLIENT: bytesSent = %li\n", bytesSent);
-			
-			// TODO: Change
-			alarm(TIMEOUT_SECS);
-			while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
-			// alarm went off
-			printf("Received Acknowledgement: %d\n", ack);
-			if (errno == EINTR) {
-				if (tries < MAX_TRIES) {
-					printf("timed out, %d more tries...\n", MAX_TRIES - tries);
-					if ((lossy_sendto(lossProb, seed, sockfd, buffer, MAX_LINE, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-						DieWithError("sendto() failed");
-					}
-					alarm(TIMEOUT_SECS);
-				}
-				else
-					DieWithError("No Response");
-			}
-			else
-				DieWithError("recvfrom() failed");
-			}
-			// recvfrom() got something -- cancelling the timeout
-			alarm(0);
-			// resetting tries
-			tries = 0;
-			*/
-			printf("CLIENT: Received acknowledgement.\n");
+			printf("CLIENT: Received acknowledgment for the bytes sent.\n");
 		}
-		
 		else {
+			// creating packet
 			fread(buffer, 1, bytesToSend, fp);
-			bytesSent = timeout_loop(lossProb, seed, sockfd, buffer, bytesToSend, ack, (struct sockaddr*) &fromAddr, fromSize,
+			// TODO: change
+			makePacket(packet, seqNum, buffer, bytesToSend);
+			// sending packet to the server
+			printf("CLIENT: Sending data to the server.\nThis is the last data packet.\n");
+			bytesSent = sendAndWaitClnt(lossProb, seed, sockfd, packet, bytesToSend + 1, ack, (struct sockaddr*) &fromAddr, fromSize,
 			(struct sockaddr*) &servAddr, sizeof(servAddr));
-			/*
-			// bytesSent = sendto(sockfd, buffer, bytesToSend, 0, (struct sockaddr*) &servAddr, sizeof(servAddr));
-			bytesSent = lossy_sendto(lossProb, seed, sockfd, buffer, bytesToSend, (struct sockaddr*) &servAddr, sizeof(servAddr));
-			if (bytesSent < 0) {
-				printf("CLIENT: sending data to the server failed.\n");
-				exit(EXIT_FAILURE);
-			}
-			printf("CLIENT: bytesSent = %li\n", bytesSent);
-			printf("Before whileloop\n");
-			
-			// TODO: Change
-			alarm(TIMEOUT_SECS);
-			while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
-				// alarm went off
-				printf("Received Acknowledgement: %d\n", ack);
-				if (errno == EINTR) {
-					if (tries < MAX_TRIES) {
-						printf("timed out, %d more tries...\n", MAX_TRIES - tries);
-						if ((lossy_sendto(lossProb, seed, sockfd, buffer, bytesToSend, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-							DieWithError("sendto() failed");
-						}
-						alarm(TIMEOUT_SECS);
-					}
-					else
-						DieWithError("No Response");
-				}
-				else
-					DieWithError("recvfrom() failed");
-			}
-			// recvfrom() got something -- cancelling the timeout
-			alarm(0);
-			// resetting tries
-			tries = 0;
-			*/
-			printf("CLIENT: Received acknowledgement.\n");
-			// *****************
+			printf("CLIENT: Received acknowledgment for the bytes sent.\n");
 		}
 		bytesToSend -= bytesSent;
-		// printf("CLIENT: Bytes sent = %li\n", bytesSent);
 	}
 	printf("CLIENT: Sent file to the server.\n");
 	
+	// creating packet for format number
+	char formatBuffer[x];
+	memcpy(formatBuffer, &format, x);
+	makePacket(packet, seqNum, formatBuffer, x);
+	
 	// sending format to the server
-	timeout_loop(lossProb, seed, sockfd, &format, sizeof(int), ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
+	printf("CLIENT: Sending format to the server.\n");
+	sendAndWaitClnt(lossProb, seed, sockfd, formatBuffer, x + 1, ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
 	sizeof(servAddr));
-	/*
-	if ((lossy_sendto(lossProb, seed, sockfd, &format, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-		printf("CLIENT: Error sending format number to the server.\n");
-		exit(EXIT_FAILURE);
-	}
-	printf("CLIENT: Sent format = %d\n", format);
-	// TODO: Change
-	alarm(TIMEOUT_SECS);
-	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
-		// alarm went off
-		printf("Received Acknowledgement: %d\n", ack);
-		if (errno == EINTR) {
-			if (tries < MAX_TRIES) {
-				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
-				if ((lossy_sendto(lossProb, seed, sockfd, &format, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-					DieWithError("sendto() failed");
-				}
-					alarm(TIMEOUT_SECS);
-			}
-			else
-				DieWithError("No Response");
-		}
-		else
-			DieWithError("recvfrom() failed");
-	}
-	// recvfrom() got something -- cancelling the timeout
-	alarm(0);
-	// resetting tries
-	tries = 0;
-	*/
-	printf("CLIENT: Acknowledgement for format number received.\n");
+	printf("CLIENT: Acknowledgment for format number received.\n");
 	
-	int outputFileNameSize = strlen(outputFileName);
+	outputFileNameSize = strlen(outputFileName);
+	
+	// creating packet for output file name size
+	char outFileNameSizeBuf[x];
+	memcpy(outFileNameSizeBuf, &outputFileNameSize, x);
+	makePacket(packet, seqNum, outFileNameSizeBuf, x);
+	
 	// sending output file name size to the server
-	timeout_loop(lossProb, seed, sockfd, &format, sizeof(int), ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
+	printf("CLIENT: Sending output file name size to the server.\n");
+	sendAndWaitClnt(lossProb, seed, sockfd, outFileNameSizeBuf, x + 1, ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
 	sizeof(servAddr));
-	/*
-	if ((lossy_sendto(lossProb, seed, sockfd, &outputFileNameSize, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-		printf("CLIENT: Error sending output file name size to the server.\n");
-		exit(EXIT_FAILURE);
-	}
-	printf("CLIENT: Sent output file name size = %d\n", outputFileNameSize);
+	printf("CLIENT: Received acknowledgment for output file name size.\n");
+	// printf("CLIENT: size sent = %d\n", outputFileNameSize);
 	
-	// TODO: Change
-	alarm(TIMEOUT_SECS);
-	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
-		// alarm went off
-		printf("Received Acknowledgement: %d\n", ack);
-		if (errno == EINTR) {
-			if (tries < MAX_TRIES) {
-				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
-				if ((lossy_sendto(lossProb, seed, sockfd, &outputFileNameSize, sizeof(int), (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-					DieWithError("sendto() failed");
-				}
-					alarm(TIMEOUT_SECS);
-			}
-			else
-				DieWithError("No Response");
-		}
-		else
-			DieWithError("recvfrom() failed");
-	}
-	// recvfrom() got something -- cancelling the timeout
-	alarm(0);
-	// resetting tries
-	tries = 0;
-	*/
-	printf("CLIENT: Acknowledgment for output file name size received.\n");
+	// creating packet
+	// adding sequence number
+	char outFileName[outputFileNameSize];
+	memcpy(outFileName, outputFileName, outputFileNameSize);
+	makePacket(packet, seqNum, outFileName, outputFileNameSize);
 	
 	// sending output file name to the server
-	timeout_loop(lossProb, seed, sockfd, outputFileName, outputFileNameSize, ack, (struct sockaddr*) &fromAddr, fromSize, 
+	printf("CLIENT: Sending output file name to the server.\n");
+	sendAndWaitClnt(lossProb, seed, sockfd, outFileName, outputFileNameSize + 1, ack, (struct sockaddr*) &fromAddr, fromSize, 
 	(struct sockaddr*) &servAddr, sizeof(servAddr));
-	/*
-	if ((lossy_sendto(lossProb, seed, sockfd, outputFileName, outputFileNameSize, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-		printf("CLIENT: Error sending output file name to the server.\n");
-		exit(EXIT_FAILURE);
-	}
-	printf("CLIENT: Sent output file name = %s\n", outputFileName);
-	
-	// TODO: Change
-	alarm(TIMEOUT_SECS);
-	while ((x = recvfrom(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize)) < 0) {
-		// alarm went off
-		printf("Received Acknowledgement: %d\n", ack);
-		if (errno == EINTR) {
-			if (tries < MAX_TRIES) {
-				printf("timed out, %d more tries...\n", MAX_TRIES - tries);
-				if ((lossy_sendto(lossProb, seed, sockfd, outputFileName, outputFileNameSize, (struct sockaddr*) &servAddr, sizeof(servAddr))) < 0) {
-					DieWithError("sendto() failed");
-				}
-					alarm(TIMEOUT_SECS);
-			}
-			else
-				DieWithError("No Response");
-		}
-		else
-			DieWithError("recvfrom() failed");
-	}
-	// recvfrom() got something -- cancelling the timeout
-	alarm(0);
-	// resetting tries
-	tries = 0;
-	*/
-	printf("CLIENT: Acknowledgment for output file name size received.\n");
-	
+	printf("CLIENT: Received acknowledgment for output file name.\n");
 	
 	// Getting the confirmation(error) message from the server
 	int errorMessage;
-	// TODO: check it
+
 	// fromSize = sizeof(fromAddr);
 	if (recvfrom(sockfd, &errorMessage, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize) < 0) {
 		printf("CLIENT: Error receiving errorMessage from the server.\n");
@@ -368,3 +208,4 @@ int main (int argc, char *argv[]) {
 	}
 	return EXIT_SUCCESS;
 }
+	

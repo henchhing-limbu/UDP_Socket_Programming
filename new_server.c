@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include "helper.h"
 
 // Global constants
 #define MAX_LINE		(1000)
@@ -24,24 +26,44 @@ int main(int argc, char* argv[]) {
 	struct sockaddr_in servAddr;							// server address
 	struct sockaddr_in clntAddr;							// client address
 	unsigned int clntAddrLen;								// length of incoming message
-	char buffer[MAX_LINE];									// buffer for data
+	char buffer[MAX_LINE + 1];									// buffer for data
 	unsigned short port;									// port number
-	unsigned long recvSize;									// size of received data
+	// unsigned long recvSize;									// size of received data
+	char numBuffer[2];									// receives numbers from client
+	unsigned int seed;										// random seed
+	float lossProb;											// loss probability
+	struct sigaction myAction;								// for setting signal handler
 	
 	// checking for number of arguments
-	if (argc != 2) {
+	if (argc != 4) {
 		printf("SERVER: Not enough argumnets. 2 argumnets are needed.\n");
 		exit(EXIT_SUCCESS);
 	}
-	
+	// port number
 	port = atoi(argv[1]);
 	printf("Port number: %d\n", port);
+	// seed number
+	seed = atoi(argv[2]);
+	// loss Probability
+	lossProb = atof(argv[3]);
+	
 	// creating socket
 	if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
 		printf("SERVER: Error creating the socket.\n");
 		exit(EXIT_FAILURE);
 	}
 	
+	// setting signal handler for alarm signal
+	myAction.sa_handler = CatchAlarm;
+	
+	if (sigfillset(&myAction.sa_mask) < 0)
+		DieWithError("sigfillset() failed");
+	myAction.sa_flags = 0;
+	
+	if (sigaction(SIGALRM, &myAction, 0) < 0)
+		DieWithError("sigaction() failed for SIGALRM");
+	
+	// constructing server address structure
 	// initializing struct members with 0
 	memset(&servAddr, 0, sizeof(servAddr));
 	// filling up the relevant struct structure
@@ -59,26 +81,26 @@ int main(int argc, char* argv[]) {
 		// set the size of the in-out parameter
 		clntAddrLen = sizeof(clntAddr);
 		
+		// initializing each member of buffer to be 0
 		memset(buffer, 0, MAX_LINE);
 		
+		// acknowledgment; contains acknowledgment number and sequence number
+		char ack[2];
+		
 		// receiving file size from the client
-		if ((recvfrom(sockfd, &recvSize, sizeof(long), 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
+		if ((recvfrom(sockfd, numBuffer, 2, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 			printf("SERVER: Error receiving the file size from the client.\n");
 			exit(EXIT_FAILURE);
 		}
-		printf("SERVER: Received file size = %li\n", recvSize);
+		printf("SERVER: Received file size.\n");
 		
-		int ack = 1;
-		// sending acknowledgment for the received file size
-		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
-			printf("SERVER: Error sending acknowledgment for the filesize.\n");
-			exit(EXIT_FAILURE);
-		}
-		printf("SERVER: Sent acknowledgment for file size. Ack = %d\n", ack);
+		ack[1] = numBuffer[0];
 		
-		unsigned long bytesToReceive = recvSize;
+		unsigned long bytesToReceive = numBuffer[1];
 		unsigned long bytesReceived;
-		
+		unsigned int clntAddrLen = sizeof(clntAddr);
+		unsigned int servAddrLen = sizeof(servAddr);
+				
 		// file to write to 
 		FILE* fp = fopen("Received","wb");
 		
@@ -86,6 +108,15 @@ int main(int argc, char* argv[]) {
 			printf("SERVER: Bytes To Receive = %li\n", bytesToReceive);
 			printf("SERVER: Receiving data from the client.\n");
 			if (bytesToReceive > MAX_LINE) {
+				// sending acknowledgment for the received file size
+				bytesReceived = sendAndWaitServ(lossProb, seed, sockfd, buffer, MAX_LINE + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
+				printf("SERVER: Received data packet fromt the client.\n");
+				/*
+				if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
+					printf("SERVER: Error sending acknowledgment for the filesize.\n");
+					exit(EXIT_FAILURE);
+				}
+				printf("SERVER: Sent acknowledgment for file size. Ack = %d\n", ack);
 				if ((bytesReceived = recvfrom(sockfd, buffer, MAX_LINE, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 					printf("SERVER: Error receiving data from the client.\n");
 					exit(EXIT_FAILURE);
@@ -94,9 +125,15 @@ int main(int argc, char* argv[]) {
 					printf("SERVER: Error sending acknowledgment to the client.\n");
 					exit(EXIT_FAILURE);
 				}
+				*/
 			}
 			else {
+				// creating packet
+				ack[0] = 1;
+				// TODO: ack[1]
 				printf("This is the last packet.\n");
+				bytesReceived = sendAndWaitServ(lossProb, seed, sockfd, buffer, MAX_LINE + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
+				/*
 				if ((bytesReceived = recvfrom(sockfd, buffer, bytesToReceive, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
 					printf("SERVER: Error receiving data from the client.\n");
 					exit(EXIT_FAILURE);
@@ -105,10 +142,12 @@ int main(int argc, char* argv[]) {
 					printf("SERVER: Error sending acknowledgment to the client.\n");
 					exit(EXIT_FAILURE);
 				}
-				printf("SERVER: Bytes received = %li\n", bytesReceived);
+				*/
+				printf("SERVER: Received data packet from the client.\n");
 			}
 			printf("SERVER: Bytes received = %li\n", bytesReceived);
-			fwrite(buffer, 1, bytesReceived, fp);
+			// TODO: change the addition of sequence number in every packet
+			fwrite(buffer + 1, 1, bytesReceived - 1, fp);
 			bytesToReceive -= bytesReceived;
 		}
 		printf("SERVER: Received file.\n");
@@ -412,14 +451,6 @@ void type1ToType0(FILE* outputStream, uint8_t amount, uint8_t* numbers, int coun
 			x = 0;
 			// converting char to decimal value
 			uint16_t num = atoi(slicedNumbers);
-			/*
-			// TODO: Find better way
-			// putting num as two bytes in an array
-			uint8_t numArray[2];
-			numArray[1] = (uint8_t) num;
-			num = num >> 8;
-			numArray[0] = (uint8_t) num;
-			*/
 			// finally wrting the 2 bytes into the file
 			fwrite(&num, 1, 2, outputStream);
 			start = end + 1;

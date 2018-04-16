@@ -15,11 +15,16 @@
 #define MAX_TRIES		 (5)
 
 extern int tries;
+// TODO: Try 
+// extern int seqNum;
 
-// function declarations
 // function declarations
 void DieWithError(char* errorMessage);
 void CatchAlarm(int ignored);
-// void timeout_loop(int sockfd, const void* buffer, size_t bufferSize, const struct sockaddr* fromAddr, socklen_t fromAddrLen, const struct sockaddr* servAddr, socklen_t servAddrLen);
-unsigned long timeout_loop(float lossProb, unsigned int seed, int sockfd, const void* buffer, size_t bufferSize,
- int ack, const struct sockaddr* fromAddr, socklen_t fromAddrLen, const struct sockaddr* servAddr, socklen_t servAddrLen);
+int sendAndWaitClnt(float lossProb, unsigned int seed, int sockfd, void* restrict buffer, size_t bufferSize,
+ char* ack, const struct sockaddr* fromAddr, socklen_t fromAddrLen, const struct sockaddr* servAddr, socklen_t servAddrLen);
+
+ int sendAndWaitServ(float lossProb, unsigned int seed, int sockfd, void* restrict buffer, size_t bufferSize, char* ack, 
+const struct sockaddr* fromAddr, socklen_t fromAddrLen, const struct sockaddr* servAddr, socklen_t servAddrLen);
+void makePacket(char* packet, char seqNum, char* dataBuffer, unsigned long dataSize);
+void extractPacket(char* packet, char* seqNum, char* dataBuffer, unsigned long dataSize);
