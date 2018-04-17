@@ -19,7 +19,7 @@ void writeToType0(FILE* outputStream, uint8_t type, uint8_t amount, uint16_t arr
 void writeToType1(FILE* outputStream, uint8_t type, uint8_t* amount, int count, uint8_t* numbers);
 void type0ToType1(uint8_t* amountArray, uint16_t* numbers, FILE* outputStream, int amount);
 void type1ToType0(FILE* outputStream, uint8_t amount, uint8_t* numbers, int count);
-int convertFile(int format, FILE* sourcefile, FILE* destfile);
+char convertFile(int format, FILE* sourcefile, FILE* destfile);
 
 int main(int argc, char* argv[]) {
 	int sockfd;		
@@ -145,52 +145,28 @@ int main(int argc, char* argv[]) {
 		// receiving output filename size from the server
 		unsigned long outputFileNameSize;
 		sendAndWaitServ(lossProb, seed, sockfd, packet, sizeof(long) + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
-		/*
-		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
-			printf("SERVER: Error sending acknowledgment for the format to the client.\n");
-			exit(EXIT_FAILURE);
-		}
-		*/
+
 		memcpy(&outputFileNameSize, packet + 1, sizeof(long));
 		printf("SERVER: Received output file name size = %li\n", outputFileNameSize);
-		/*
-		// receiving output file name size
-		if ((recvfrom(sockfd, &outputFileNameSize, sizeof(int), 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
-			printf("SERVER: Error receiving file name size from the client.\n");
-			exit(EXIT_FAILURE);
-		}
-		printf("SERVER: Received output file name size = %d\n", outputFileNameSize);
-		*/
-		
+
 		// sending acknowledgment for the output file name size to the client
 		// receiving output file name from the client.
 		char outputFileName[outputFileNameSize];
 		sendAndWaitServ(lossProb, seed, sockfd, packet, outputFileNameSize + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
 		memcpy(outputFileName, packet + 1, outputFileNameSize);
 		printf("SERVER: Received output file name = %s\n", outputFileName);
-		/*
-		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
-			printf("SERVER: Error sending acknowledgement for the output file name size to the client.\n");
-			exit(EXIT_FAILURE);
-		}
-		// receiving the output file name from the client
-		if ((recvfrom(sockfd, outputFileName, outputFileNameSize, 0, (struct sockaddr*) &clntAddr, &clntAddrLen)) < 0) {
-			printf("SERVER: Error receiving output file name from the client.\n");
-			exit(EXIT_FAILURE);
-		}
-		*/
 		
 		// TODO: send with loss probability
 		// sending acknowledgement for the output file name to the client
-		if (sendto(sockfd, &ack, sizeof(int), 0, (struct sockaddr*) &clntAddr, clntAddrLen) < 0) {
-			printf("SERVER: Error sending acknowledgement for the output file name to the client.\n");
-			exit(EXIT_FAILURE);
-		}
+		// Send the ack for the output file name and with for client done ack USE SEND AND WAIT
+		sendAndWaitServ(lossProb, seed, sockfd, packet, sizeof(long) + 1, ack, (struct sockaddr*) &clntAddr, clntAddrLen, (struct sockaddr*) &servAddr, servAddrLen);
+		printf("SERVER: Received client done acknowledgement from the client.\n");
 		
 		FILE* destfile = fopen(outputFileName, "wb");
 		fp = fopen("Received","rb");
 		
-		int errorMessage = convertFile(format, fp, destfile);
+		char errorMessage = convertFile(format, fp, destfile);
+		ack[1] = errorMessage;
 		
 		fclose(destfile);
 		fclose(fp);
@@ -200,15 +176,20 @@ int main(int argc, char* argv[]) {
 		remove("Recevied");
 		
 		// sending acknowledgment to the client
+		for (int i = 0; i < MAX_TRIES; i++) {
+			lossy_sendto(lossProb, seed, sockfd, ack, ACK_SIZE, (struct sockaddr*) &clntAddr, clntAddrLen);
+		}
+		/*
 		if (sendto(sockfd, &errorMessage, sizeof(int), 0, (struct sockaddr*) &clntAddr, sizeof(clntAddr)) < 0) {
 			printf("SERVER: Error sending data back to the client.\n");
 			exit(EXIT_FAILURE);
 		}
+		*/
 	}
 	//return EXIT_SUCCESS;
 }
 
-int convertFile(int format, FILE* sourcefile, FILE* outputStream) {
+char convertFile(int format, FILE* sourcefile, FILE* outputStream) {
 	printf("Entered convertFile\n");
 	// moving the pointer to the end of the file
 	fseek(sourcefile, 0, SEEK_END);

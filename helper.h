@@ -12,8 +12,8 @@
 
 // Global constants
 #define TIMEOUT_SECS	 (3)
-#define MAX_TRIES		 (5)
-
+#define MAX_TRIES		 (12)
+#define ACK_SIZE		 (2)
 extern int tries;
 // TODO: Try 
 // extern int seqNum;

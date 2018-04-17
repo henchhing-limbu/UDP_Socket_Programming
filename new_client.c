@@ -193,15 +193,30 @@ int main (int argc, char *argv[]) {
 	(struct sockaddr*) &servAddr, sizeof(servAddr), &seqNum);
 	printf("CLIENT: Received acknowledgment for output file name.\n");
 	
+	// Send the client done ack to the server and wait for the Server Response 
+	// Get rid of the solo recv from below this 
+	// Use the send and wait function
+	
+	unsigned long clntDone = 1;
+	char clntDoneBuf[x];
+	memcpy(clntDoneBuf, &clntDone, x);
+	makePacket(packet, seqNum, clntDoneBuf, x);
+	// Sending client done acknowledgment to the server
 	// Getting the confirmation(error) message from the server
-	int errorMessage;
-
+	sendAndWaitClnt(lossProb, seed, sockfd, packet, x + 1, ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
+	sizeof(servAddr), &seqNum);
+	printf("CLIENT: Received error message from the server.\n");
+	
+	/*
+	printf("CLIENT: Sending client done acknowledgment to the server.\n");
+	sendAndWaitClnt(lossProb, seed, sockfd, packet, 
 	// fromSize = sizeof(fromAddr);
 	if (recvfrom(sockfd, &errorMessage, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize) < 0) {
 		printf("CLIENT: Error receiving errorMessage from the server.\n");
 		exit(EXIT_FAILURE);
 	}
-	if (errorMessage < 0)  {
+	*/
+	if (ack[1] < 0)  {
 		printf("Format error\n");
 		exit(EXIT_FAILURE);
 	}
