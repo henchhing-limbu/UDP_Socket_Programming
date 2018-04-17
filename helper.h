@@ -22,7 +22,8 @@ extern int tries;
 void DieWithError(char* errorMessage);
 void CatchAlarm(int ignored);
 int sendAndWaitClnt(float lossProb, unsigned int seed, int sockfd, void* restrict buffer, size_t bufferSize,
- char* ack, const struct sockaddr* fromAddr, socklen_t fromAddrLen, const struct sockaddr* servAddr, socklen_t servAddrLen);
+ char* ack, const struct sockaddr* fromAddr, socklen_t fromAddrLen, const struct sockaddr* servAddr, 
+ socklen_t servAddrLen, char* seqNum);
 
  int sendAndWaitServ(float lossProb, unsigned int seed, int sockfd, void* restrict buffer, size_t bufferSize, char* ack, 
 const struct sockaddr* fromAddr, socklen_t fromAddrLen, const struct sockaddr* servAddr, socklen_t servAddrLen);
