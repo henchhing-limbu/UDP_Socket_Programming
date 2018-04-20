@@ -1,25 +1,7 @@
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <signal.h>								// for sigaction()
-// #include <errno.h>
-// #include "sendlib.h"
 #include "helper.h"
 
-
-// Global constants
-#define MAX_LINE		 (1000)
-
-// function declarations
-
 int main (int argc, char *argv[]) {
-	// socket descriptor
-	int sockfd;
+	int sockfd;									// socket descriptor
 	struct sockaddr_in servAddr;				// echo server address
 	struct sockaddr_in fromAddr;				// source address of echo
 	unsigned short port;						// server port
@@ -27,19 +9,20 @@ int main (int argc, char *argv[]) {
 	char* ipAddress;							// IP address of server
 	char* filePath;								// path to the input file
 	char buffer[MAX_LINE];						// buffer for receiving data
-	// int echoStringLen;						// length of sent string
-	// int recvStringLen;						// length of received string
-	unsigned long fileSize;						// fileSize
+	long fileSize;								// fileSize
 	unsigned int seed;							// random seed
-	unsigned long format;						// to format
+	int format;									// to format
 	unsigned long outputFileNameSize;			// output file name size
 	float lossProb;								// loss probability
 	struct sigaction myAction;					// For setting signal handler
-	char numBuffer[2];							// sending numbers to the server
 	char* outputFileName;						// output file name
-	char packet[MAX_LINE+1];
+	char ack;									// acknowledgment from server
+	seqNum = 0;									// sequence no. initialized to 0
+	char clientDone = 1;						// client is done message
+	char errorMessage;							// error message from server
+	tries = 0;									// int
 	
-	// checking for correct number of arguemnts
+	// checking for correct number of arguments
 	if (argc < 8) {
 		printf("CLIENT: Not enough arguments.\n");
 		exit(EXIT_FAILURE);
@@ -58,7 +41,7 @@ int main (int argc, char *argv[]) {
 		printf("CLIENT: Incorrect format number. Format number range is 0 to 3.\n");
 		exit(EXIT_FAILURE);
 	}
-	printf("Format: %li\n", format);
+	printf("Format: %d\n", format);
 	outputFileName = argv[5];
 	printf("output file name: %s\n", outputFileName);
 	lossProb = atof(argv[6]);
@@ -66,21 +49,22 @@ int main (int argc, char *argv[]) {
 	seed = atoi(argv[7]);
 	printf("seed number: %d\n", seed);
 	
-	// creating UDP socket
-	if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
-		printf("SERVER: Couldn't creat socket.\n");
-		exit(EXIT_FAILURE);
-	}
-	
 	// set signal handler for alarm signal
 	myAction.sa_handler = CatchAlarm;
 	
-	if (sigfillset(&myAction.sa_mask) < 0)				// block everything in handler
+	// block everything in handler
+	if (sigfillset(&myAction.sa_mask) < 0)				
 		DieWithError("sigfillset() failed");
 	myAction.sa_flags = 0;
 	
 	if (sigaction(SIGALRM, &myAction, 0) < 0)
 		DieWithError("sigaction() failed for SIGALRM");
+	
+	// creating UDP socket
+	if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+		printf("SERVER: Couldn't creat socket.\n");
+		exit(EXIT_FAILURE);
+	}
 	
 	// constructing the server address structure
 	// filling the server address structure with 0
@@ -100,132 +84,66 @@ int main (int argc, char *argv[]) {
 	printf("File size = %lu\n", fileSize);
 	rewind(fp);
 	
-	unsigned long bytesToSend = fileSize;
-	printf("Bytes to send = %lu\n", bytesToSend);
-	unsigned long bytesSent;
-	// size of clnt address
-	fromSize = sizeof(fromAddr);
+	// sending file size to the server
+	printf("CLIENT: Sending file size to the server.\n");
+	sendAndWaitClnt(sockfd, lossProb, seed, &servAddr, sizeof(servAddr), &fromAddr, sizeof(fromAddr), 
+	&fileSize, sizeof(fileSize), &ack, sizeof(ack));
+	printf("CLIENT: Finished sending file size to  the server.\n");
 	
-	// sequence number
-	char seqNum = 0;
-	// declaring ack and initializing it
-	char ack[2] = {seqNum, 0};
+	// bytes to send == file size
+	long bytesToSend = fileSize;
+	// printf("Bytes to send = %lu\n", bytesToSend);
 	
-	// creating file size buffer
-	int x = sizeof(long);
-	char fileSizeBuffer[x];
-	memcpy(fileSizeBuffer, &fileSize, x);
-	
-	// makes file size packet
-	makePacket(packet, seqNum, fileSizeBuffer, x);
-	
-	// sending file size packet to the server
-	printf("CLIENT: Sending filesize to the server.\n");
-	sendAndWaitClnt(lossProb, seed, sockfd, packet, x + 1, ack, (struct sockaddr*) &fromAddr, fromSize, 
-			(struct sockaddr*) &servAddr, sizeof(servAddr), &seqNum); 
-	printf("CLIENT: Received acknowledgment from the server.\n");
-	
-	// sending data to the server
+	printf("CLIENT: Sending file.\n");
 	while (bytesToSend > 0) {
-		printf("CLIENT: Sending file data to the server.\n");
 		if (bytesToSend > MAX_LINE) {
 			fread(buffer, 1, MAX_LINE, fp);
-			// TODO: change
-			makePacket(packet, seqNum, buffer, MAX_LINE);
-			// sending packet to the server
-			printf("CLIENT: Sending data to the server.\n");
-			bytesSent = sendAndWaitClnt(lossProb, seed, sockfd, packet, MAX_LINE + 1, ack, (struct sockaddr*) &fromAddr,
-			fromSize,(struct sockaddr*) &servAddr, sizeof(servAddr), &seqNum);
-			printf("CLIENT: Received acknowledgment for the bytes sent.\n");
+			sendAndWaitClnt(sockfd, lossProb, seed, 
+			&servAddr, sizeof(servAddr), &fromAddr, 
+			sizeof(fromAddr), buffer, MAX_LINE, 
+			&ack, sizeof(ack));
 		}
 		else {
-			// creating packet
 			fread(buffer, 1, bytesToSend, fp);
-			// TODO: change
-			makePacket(packet, seqNum, buffer, bytesToSend);
-			// sending packet to the server
-			printf("CLIENT: Sending data to the server.\nThis is the last data packet.\n");
-			bytesSent = sendAndWaitClnt(lossProb, seed, sockfd, packet, bytesToSend + 1, ack, (struct sockaddr*) &fromAddr, fromSize,
-			(struct sockaddr*) &servAddr, sizeof(servAddr), &seqNum);
-			printf("CLIENT: Received acknowledgment for the bytes sent.\n");
+			sendAndWaitClnt(sockfd, lossProb, seed, 
+			&servAddr, sizeof(servAddr), &fromAddr, 
+			sizeof(fromAddr), buffer, bytesToSend, 
+			&ack, sizeof(ack));
 		}
-		bytesToSend += 1;
-		bytesToSend -= bytesSent;
-		printf("Bytes to send = %lu \n", bytesToSend);
+		bytesToSend -= (bytesSent - 1);
 	}
-	printf("CLIENT: Sent file to the server.\n");
+	printf("CLIENT: Finished sending file data to the server.\n");
 	
-	// creating packet for format number
-	char formatBuffer[x];
-	memcpy(formatBuffer, &format, x);
-	makePacket(packet, seqNum, formatBuffer, x);
-	// makePacket(packet, seqNum, &format, sizeof(format));
+	// sending format number to the server
+	printf("CLIENT: Sending format number.\n");
+	sendAndWaitClnt(sockfd, lossProb, seed, &servAddr, sizeof(servAddr), 
+	&fromAddr, sizeof(fromAddr), &format, sizeof(format), &ack, sizeof(ack));
+	printf("CLIENT: Finished sending format number.\n");
 	
-	// sending format to the server
-	printf("CLIENT: Sending format to the server.\n");
-	sendAndWaitClnt(lossProb, seed, sockfd, packet, x + 1, ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
-	sizeof(servAddr), &seqNum);
-	printf("CLIENT: Acknowledgment for format number received.\n");
-	
+	// sending output file size to the server
+	printf("CLIENT: Sending file size.\n");
 	outputFileNameSize = strlen(outputFileName);
-	
-	// creating packet for output file name size
-	char outFileNameSizeBuf[x];
-	memcpy(outFileNameSizeBuf, &outputFileNameSize, x);
-	makePacket(packet, seqNum, outFileNameSizeBuf, x);
-	
-	// sending output file name size to the server
-	printf("CLIENT: Sending output file name size to the server.\n");
-	sendAndWaitClnt(lossProb, seed, sockfd, packet, x + 1, ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
-	sizeof(servAddr), &seqNum);
-	printf("CLIENT: Received acknowledgment for output file name size.\n");
-	// printf("CLIENT: size sent = %d\n", outputFileNameSize);
-	
-	// creating packet
-	// adding sequence number
-	char outFileName[outputFileNameSize];
-	memcpy(outFileName, outputFileName, outputFileNameSize);
-	makePacket(packet, seqNum, outFileName, outputFileNameSize);
+	sendAndWaitClnt(sockfd, lossProb, seed, &servAddr, sizeof(servAddr), 
+	&fromAddr, sizeof(fromAddr), &outputFileNameSize, sizeof(outputFileNameSize), &ack, sizeof(ack));
+	printf("CLIENT: Finished sending file size");
 	
 	// sending output file name to the server
-	printf("CLIENT: Sending output file name to the server.\n");
-	sendAndWaitClnt(lossProb, seed, sockfd, packet, outputFileNameSize + 1, ack, (struct sockaddr*) &fromAddr, fromSize, 
-	(struct sockaddr*) &servAddr, sizeof(servAddr), &seqNum);
-	printf("CLIENT: Received acknowledgment for output file name.\n");
+	printf("CLIENT: Sending output file name.\n");
+	sendAndWaitClnt(sockfd, lossProb, seed, &servAddr, sizeof(servAddr), 
+	&fromAddr, sizeof(fromAddr), outputFileName, outputFileNameSize, &ack, sizeof(ack));
+	printf("CLIENT: Finished sending output file name.\n");
 	
-	// Send the client done ack to the server and wait for the Server Response 
-	// Get rid of the solo recv from below this 
-	// Use the send and wait function
+	// sending "client done" message to the server
+	printf("CLIENT: Sending client done.\n");
+	sendAndWaitClnt(sockfd, lossProb, seed, &servAddr, sizeof(servAddr), 
+	&fromAddr, sizeof(fromAddr), &clientDone, sizeof(clientDone), &errorMessage, sizeof(errorMessage));
+	printf("CLIENT: Finsihed sending client done.\n");
 	
-	unsigned long clntDone = 1;
-	char clntDoneBuf[x];
-	memcpy(clntDoneBuf, &clntDone, x);
-	makePacket(packet, seqNum, clntDoneBuf, x);
-	// Sending client done acknowledgment to the server
-	// Getting the confirmation(error) message from the server
-	sendAndWaitClnt(lossProb, seed, sockfd, packet, x + 1, ack, (struct sockaddr*) &fromAddr, fromSize, (struct sockaddr*) &servAddr,
-	sizeof(servAddr), &seqNum);
-	printf("CLIENT: Received error message from the server.\n");
-	
-	/*
-	printf("CLIENT: Sending client done acknowledgment to the server.\n");
-	sendAndWaitClnt(lossProb, seed, sockfd, packet, 
-	// fromSize = sizeof(fromAddr);
-	if (recvfrom(sockfd, &errorMessage, sizeof(int), 0, (struct sockaddr*) &fromAddr, &fromSize) < 0) {
-		printf("CLIENT: Error receiving errorMessage from the server.\n");
-		exit(EXIT_FAILURE);
-	}
-	*/
-	if (ack[1] < 0)  {
+	if (errorMessage < 0)  {
 		printf("Format error\n");
 		exit(EXIT_FAILURE);
 	}
 	printf("Success.\n");
 	
-	if (close(sockfd) < 0) {
-		printf("CLIENT: Error closing the socket.\n");
-		exit(EXIT_FAILURE);
-	}
-	return EXIT_SUCCESS;
+	return 0;
 }
-	

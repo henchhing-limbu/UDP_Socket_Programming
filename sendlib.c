@@ -2,8 +2,7 @@
 /* 
  * This function must NOT be modified.
  */
-ssize_t lossy_sendto (float loss_ratio, unsigned int random_seed, int sockfd, const void * buf, size_t len,
-                     const struct sockaddr *dest_addr, socklen_t addrlen)
+ssize_t lossy_sendto (float loss_ratio, unsigned int random_seed, int sockfd, const void * buf, size_t len, const struct sockaddr *dest_addr, socklen_t addrlen)
 {
   int n;
   float f;
