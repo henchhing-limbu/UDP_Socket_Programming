@@ -45,6 +45,7 @@ int main(int argc, char* argv[]) {
 		DieWithError("sigaction() failed for SIGALRM");
 	
 	while(1) {
+		// creating listening socket
 		if ((sockfd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
 			printf("SERVER: Error creating the socket.\n");
 			exit(EXIT_FAILURE);
