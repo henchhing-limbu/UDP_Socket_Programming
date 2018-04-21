@@ -8,7 +8,7 @@
 
 // GLOBAL CONSTANTS
 #define MAX_LINE 1000	
-#define TIMEOUT_SECS 1
+#define TIMEOUT_SECS 3
 #define MAX_TRIES 500			
 
 // extern variables

@@ -162,9 +162,6 @@ char convertFile(int format, FILE* sourcefile, FILE* outputStream) {
 	// gives the offset which must be 0
 	long temp = ftell(sourcefile);
 	
-	// printing filesize and temp
-	// printf("Filesize: %lu\n", fileSize);
-	// printf("Temp: %lu\n", temp);
 	
 	// loop until the end of the file
 	while (temp < fileSize) {
@@ -316,9 +313,7 @@ void writeToType0(FILE* outputStream, uint8_t type, uint8_t amount, uint16_t* ar
 	memcpy(unitData + 1, &amount, 1);
 	// copyting the numbers array to unitData
 	memcpy(unitData + 2, array, amount * 2);
-	
 	// printf("%c\n", unitData[unitLength-1]);
-	
 	
 	// writing to a *outStream
 	fwrite(unitData, 1, unitLength, outputStream);
@@ -337,7 +332,6 @@ void writeToType1(FILE* outputStream, uint8_t type, uint8_t* amount, int count, 
 // translates to type1 format
 void type0ToType1(uint8_t* amountArray, uint16_t* numbers, FILE* outputStream, int amount) {
 	// change the first byte
-	// TODO: Assume for now these values are passed
 	uint8_t type = 1;
 	fwrite(&type, 1, 1, outputStream);
 	
@@ -345,9 +339,10 @@ void type0ToType1(uint8_t* amountArray, uint16_t* numbers, FILE* outputStream, i
 	int count = 0;
 	char comma = ',';
 	for (int i = 0; i < amount; i++) {
-		char buffer[5];
-		int num = numbers[i];
-		count = snprintf(buffer, 5, "%d", num);
+		char buffer[6];
+		uint16_t num = numbers[i];
+		num = (num >> 8) | (num << 8);
+		count = snprintf(buffer, 6, "%d", num);
 		// depending on the value of count add the char from buffer into file
 		fwrite(buffer, 1, count, outputStream);
 		if (i != amount-1) 
@@ -356,13 +351,11 @@ void type0ToType1(uint8_t* amountArray, uint16_t* numbers, FILE* outputStream, i
 }
 
 void type1ToType0(FILE* outputStream, uint8_t amount, uint8_t* numbers, int count) {
-	// TODO: 
 	// changing the first byte
 	uint8_t type = 0;
 	fwrite(&type, 1, 1, outputStream);
 	
 	// writing the decimal amount to the file
-	// TODO: Fix this
 	// Convert to a byte/ maybe more than a byte
 	fwrite(&amount, 1, 1, outputStream);
 	int start = 0;
@@ -383,18 +376,14 @@ void type1ToType0(FILE* outputStream, uint8_t amount, uint8_t* numbers, int coun
 				x++;
 			}
 			x = 0;
+			// printf("String value = %s\n", slicedNumbers);
 			// converting char to decimal value
 			uint16_t num = atoi(slicedNumbers);
-			/*
-			// TODO: Find better way
-			// putting num as two bytes in an array
-			uint8_t numArray[2];
-			numArray[1] = (uint8_t) num;
-			num = num >> 8;
-			numArray[0] = (uint8_t) num;
-			*/
+			num = (num >> 8) | (num << 8);
+			// printf("Number value = %d\n", num);
 			// finally wrting the 2 bytes into the file
 			fwrite(&num, 1, 2, outputStream);
+			memset(slicedNumbers, 0, end-start);
 			start = end + 1;
 		}
 	} 
